@@ -22,3 +22,5 @@ foreach ( [
 
 delete_transient( 'wpccd_dashboard_widgets' );
 delete_transient( 'wpccd_admin_bar_nodes' );
+delete_site_option( 'external_updates-wp-clean-client-dashboard' );
+wp_clear_scheduled_hook( 'puc_cron_check_updates-wp-clean-client-dashboard' );

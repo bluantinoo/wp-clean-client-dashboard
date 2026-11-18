@@ -78,6 +78,14 @@ add_filter( 'wpccd_hide_all_notices', '__return_false' );
 
 English strings, with an Italian translation in `languages/`. A `.pot` template is included for other languages.
 
+## Updates
+
+The plugin is not on wordpress.org: it updates itself from the [GitHub releases](https://github.com/bluantinoo/wp-clean-client-dashboard/releases) of this repository, through the bundled [Plugin Update Checker](https://github.com/YahnisElsts/plugin-update-checker) library (MIT). New versions show up in **Dashboard → Updates** and in `wp plugin update`, like any other plugin. The `Update URI` header tells WordPress not to look for this slug on wordpress.org, so a different plugin published there under the same name can never be offered as an update.
+
+Only the zip attached to a release is installed. The site asks the GitHub API for the latest release about every 12 hours. GitHub sees what WordPress sends with every outgoing request: the server's IP address, and the WordPress version and site URL in the User-Agent.
+
+Whoever can publish a release on this repository can ship code to every site that runs the plugin, which is true of any update channel. Releases are built by the workflow in `.github/workflows/release.yml` from a version tag on `main`.
+
 ## Uninstall
 
 Deleting the plugin from the Plugins screen removes its options and cached lists.

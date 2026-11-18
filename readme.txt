@@ -4,7 +4,7 @@ Tags: admin, dashboard, cleanup, client, white label
 Requires at least: 6.0
 Tested up to: 7.1
 Requires PHP: 8.0
-Stable tag: 1.4.0
+Stable tag: 1.4.1
 License: GPL-2.0-or-later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -23,7 +23,7 @@ Cleans up the WordPress admin for clients and non-technical users, while leaving
 * **Custom footer text** (links and basic HTML allowed).
 * **Export / Import** of all settings as JSON.
 
-No page builders, no upsells, no tracking. One file, no dependencies beyond WordPress itself.
+No page builders, no upsells, no analytics. No dependencies beyond WordPress itself, apart from the bundled library that checks the GitHub releases for updates; the update check and the download of an update are the only outgoing requests the plugin makes.
 
 = What this plugin is not =
 
@@ -84,6 +84,11 @@ Return `false` from the `wpccd_hide_all_notices` filter. Only the notices matchi
 
 == Changelog ==
 
+= 1.4.1 =
+* Added: updates from the GitHub releases of the plugin, through the bundled Plugin Update Checker 6.0 (MIT).
+* Added: Update URI header, so WordPress never looks for this slug on wordpress.org.
+* Added: uninstall also removes the update checker state.
+
 = 1.4.0 =
 * Changed: the settings page is available only to excluded users, and changes to the plugin options made by a logged-in restricted user are discarded, whatever the write path.
 * Changed: when no saved user is an existing administrator, the plugin restricts nobody and shows a warning, instead of silently restricting everybody.
@@ -123,6 +128,9 @@ Return `false` from the `wpccd_hide_all_notices` filter. Only the notices matchi
 * Initial release. Notices hiding, update capability blocking, basic menu removal, user exclusion list.
 
 == Upgrade Notice ==
+
+= 1.4.1 =
+Updates now come from the GitHub releases of the plugin. Install this version by hand once; the next ones arrive in Dashboard > Updates.
 
 = 1.4.0 =
 The settings page is now visible only to excluded users, and file editors are blocked for restricted users. Check the excluded list after updating: if it holds no existing administrator, restrictions switch off until you save it.

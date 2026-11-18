@@ -3,7 +3,7 @@
  * Plugin Name:  WP Clean Client Dashboard
  * Plugin URI:   https://github.com/bluantinoo/wp-clean-client-dashboard
  * Description:  Hides notices, blocks updates, hides menu items and cleans the admin UI for all users except designated ones.
- * Version:      1.4.0
+ * Version:      1.4.1
  * Author:       Diego Vagnoli
  * Author URI:   https://diegovagnoli.it
  * License:      GPL-2.0-or-later
@@ -12,6 +12,7 @@
  * Domain Path:  /languages
  * Requires at least: 6.0
  * Requires PHP: 8.0
+ * Update URI:   https://github.com/bluantinoo/wp-clean-client-dashboard
  */
 
 if ( ! defined( 'ABSPATH' ) ) {
@@ -1228,3 +1229,31 @@ final class WP_Clean_Client_Dashboard {
 
 register_activation_hook( __FILE__, [ 'WP_Clean_Client_Dashboard', 'activate' ] );
 WP_Clean_Client_Dashboard::init();
+
+/*
+ * Updates come from the GitHub releases of the plugin, not from wordpress.org
+ * (the Update URI header keeps WordPress from looking there). Only the zip
+ * attached to a release is installed, never the source archive of the tag.
+ */
+require_once __DIR__ . '/lib/plugin-update-checker/plugin-update-checker.php';
+
+( static function (): void {
+    $checker = \YahnisElsts\PluginUpdateChecker\v6\PucFactory::buildUpdateChecker(
+        'https://github.com/bluantinoo/wp-clean-client-dashboard/',
+        __FILE__,
+        'wp-clean-client-dashboard'
+    );
+    $checker->getVcsApi()->enableReleaseAssets(
+        '/^wp-clean-client-dashboard\.zip$/',
+        \YahnisElsts\PluginUpdateChecker\v6p0\Vcs\Api::REQUIRE_RELEASE_ASSETS
+    );
+
+    // Releases only: without this the library falls back to the latest tag and
+    // then to the main branch, whose code was never built or released.
+    add_filter(
+        'puc_vcs_update_detection_strategies-wp-clean-client-dashboard',
+        static function ( $strategies ) {
+            return array_intersect_key( $strategies, [ 'latest_release' => true ] );
+        }
+    );
+} )();
