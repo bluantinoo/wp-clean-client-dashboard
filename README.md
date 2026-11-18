@@ -4,6 +4,10 @@ A WordPress plugin that cleans up the admin for clients and non-technical users,
 
 You hand over a site, the client logs in as an administrator, and the first thing they see is a wall of plugin notices, update badges, a Theme File Editor and a Customizer they should never open. This plugin hides all of that for everyone except the users you pick, from a single settings page, without touching roles.
 
+![Settings page, as seen by an excluded user](screenshots/settings.png)
+
+![Dashboard as seen by a restricted administrator: no notices, no update badges, trimmed admin bar, custom footer](screenshots/restricted-dashboard.png)
+
 ## What it does
 
 For every logged-in user who is not on the excluded list:
