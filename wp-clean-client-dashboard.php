@@ -1,16 +1,16 @@
 <?php
 /**
  * Plugin Name:  WP Clean Client Dashboard
- * Plugin URI:   https://diegovagnoli.it
+ * Plugin URI:   https://github.com/bluantinoo/wp-clean-client-dashboard
  * Description:  Hides notices, blocks updates, hides menu items and cleans the admin UI for all users except designated ones.
- * Version:      1.3.0
+ * Version:      1.4.0
  * Author:       Diego Vagnoli
  * Author URI:   https://diegovagnoli.it
  * License:      GPL-2.0-or-later
  * License URI:  https://www.gnu.org/licenses/gpl-2.0.html
  * Text Domain:  wp-clean-client-dashboard
  * Domain Path:  /languages
- * Requires at least: 5.0
+ * Requires at least: 6.0
  * Requires PHP: 8.0
  */
 
@@ -24,7 +24,10 @@ final class WP_Clean_Client_Dashboard {
     // CONFIGURATION
     // =========================================================================
 
-    /** true = hides ALL admin notices; false = only those specified via CSS selectors. */
+    /**
+     * true = hides ALL admin notices; false = only those specified via CSS selectors.
+     * Can be changed with the `wpccd_hide_all_notices` filter.
+     */
     private const HIDE_ALL_NOTICES = true;
 
     /** Database option keys. */
@@ -43,7 +46,7 @@ final class WP_Clean_Client_Dashboard {
     private const TRANSIENT_ADMIN_BAR = 'wpccd_admin_bar_nodes';
 
     /** Default hidden CSS selectors (used before the first save). */
-    private const DEFAULT_SELECTORS = '.th_checkout_field_editor_for_woocommerce-admin-notice';
+    private const DEFAULT_SELECTORS = '';
 
     /**
      * Menu items hidden by default.
@@ -51,11 +54,52 @@ final class WP_Clean_Client_Dashboard {
      */
     private const DEFAULT_HIDDEN_MENUS = [
         'index.php::update-core.php',   // Dashboard → Updates
-        'hello-elementor',               // Hello Elementor (top-level)
         'themes.php::theme-editor.php',  // Appearance → Theme File Editor
         'themes.php::site-editor.php',   // Appearance → Site Editor
         'themes.php::customize.php',     // Appearance → Customizer
     ];
+
+    /**
+     * Capabilities removed from restricted users.
+     * Can be changed with the `wpccd_blocked_caps` filter (e.g. add 'activate_plugins').
+     */
+    private const DEFAULT_BLOCKED_CAPS = [
+        'update_core',
+        'update_plugins',
+        'update_themes',
+        'install_plugins',
+        'install_themes',
+        'delete_plugins',
+        'delete_themes',
+        'edit_plugins',
+        'edit_themes',
+        'edit_files',
+        // The Customizer is blocked by handle_customize_redirect(): 'customize' is a
+        // meta capability mapped to edit_theme_options, which also covers Menus and Widgets.
+    ];
+
+    /** HTML allowed in the custom footer text. */
+    private const FOOTER_ALLOWED_HTML = [
+        'a'      => [ 'href' => true, 'target' => true, 'rel' => true, 'title' => true ],
+        'strong' => [],
+        'em'     => [],
+        'span'   => [ 'style' => true ],
+        'br'     => [],
+    ];
+
+    /**
+     * Per-request cache of the effective allowed user IDs (null = not computed yet).
+     *
+     * @var int[]|null
+     */
+    private ?array $allowed_ids = null;
+
+    /**
+     * Per-request cache of the filtered blocked capabilities (null = not computed yet).
+     *
+     * @var string[]|null
+     */
+    private ?array $blocked_caps = null;
 
     // =========================================================================
 
@@ -70,7 +114,21 @@ final class WP_Clean_Client_Dashboard {
             );
         } );
 
+        // Reset the cached allowed list whenever the option changes.
+        $reset = static function () use ( $instance ) {
+            $instance->allowed_ids = null;
+        };
+        add_action( 'add_option_' . self::OPT_USERS,    $reset );
+        add_action( 'update_option_' . self::OPT_USERS, $reset );
+        add_action( 'delete_option_' . self::OPT_USERS, $reset );
+
         add_action( 'admin_init',        [ $instance, 'register_settings' ] );
+        add_filter( 'option_page_capability_wpccd_group', [ $instance, 'settings_capability' ] );
+        // Covers every other write path too (e.g. options.php with option_page=options).
+        foreach ( [ self::OPT_USERS, self::OPT_SELECTORS, self::OPT_MENUS, self::OPT_WIDGETS, self::OPT_ADMIN_BAR, self::OPT_FOOTER ] as $option ) {
+            add_filter( 'pre_update_option_' . $option, [ $instance, 'keep_option_for_restricted_users' ], 10, 2 );
+        }
+        add_action( 'admin_notices',     [ $instance, 'maybe_show_unconfigured_notice' ] );
         add_action( 'admin_init',        [ $instance, 'handle_notices' ] );
         add_action( 'admin_init',        [ $instance, 'handle_customize_redirect' ] );
         add_filter( 'user_has_cap',      [ $instance, 'block_update_caps' ], 10, 4 );
@@ -97,20 +155,87 @@ final class WP_Clean_Client_Dashboard {
     // HELPERS
     // =========================================================================
 
-    /** Returns the list of allowed user IDs from options. */
-    private function get_allowed_user_ids(): array {
-        $ids = get_option( self::OPT_USERS, [ 1 ] );
-        return array_map( 'intval', (array) $ids );
+    /**
+     * Stores the activating user as the first allowed user, so a fresh install
+     * never starts with a guessed list. Existing settings are kept.
+     * Without a current user (e.g. WP-CLI without --user) an empty list is stored:
+     * the plugin starts unconfigured and asks for the excluded users.
+     */
+    public static function activate(): void {
+        if ( false === get_option( self::OPT_USERS, false ) ) {
+            $user_id = get_current_user_id();
+            add_option( self::OPT_USERS, $user_id ? [ $user_id ] : [] );
+        }
     }
 
-    /** Checks whether the current user is in the allowed list. */
+    /**
+     * Returns the user IDs saved in the options, as integers.
+     * Sites upgraded from a version before 1.4.0 that never saved the list fall
+     * back to user ID 1, the old default; it is still validated like any saved ID.
+     */
+    private function get_saved_user_ids(): array {
+        $saved = get_option( self::OPT_USERS, false );
+        if ( false === $saved ) {
+            $saved = [ 1 ];
+        }
+        return array_values( array_map( 'intval', (array) $saved ) );
+    }
+
+    /**
+     * Returns the saved user IDs that still belong to an existing administrator.
+     *
+     * IDs of deleted users, or of users who lost manage_options (e.g. after a
+     * database migration that renumbered users), are ignored. Reads the role
+     * capabilities directly instead of calling user_can(), because this runs
+     * inside the user_has_cap filter and must not recurse into it.
+     *
+     * @return int[]
+     */
+    private function get_allowed_user_ids(): array {
+        if ( null !== $this->allowed_ids ) {
+            return $this->allowed_ids;
+        }
+
+        $valid = [];
+        foreach ( $this->get_saved_user_ids() as $id ) {
+            $user = $id > 0 ? get_userdata( $id ) : false;
+            // is_super_admin() is only safe on multisite: on a single site it calls has_cap().
+            if ( $user && ( ! empty( $user->allcaps['manage_options'] ) || ( is_multisite() && is_super_admin( $id ) ) ) ) {
+                $valid[] = $id;
+            }
+        }
+
+        $this->allowed_ids = $valid;
+        return $valid;
+    }
+
+    /**
+     * True when no saved user is an existing administrator.
+     * In this state the plugin restricts nobody (fail-open): a cleanup tool must
+     * never lock every administrator out of its own settings.
+     */
+    private function is_unconfigured(): bool {
+        return empty( $this->get_allowed_user_ids() );
+    }
+
+    /** Checks whether a user is exempt from the restrictions. */
+    private function is_allowed_id( int $user_id ): bool {
+        return $this->is_unconfigured() || in_array( $user_id, $this->get_allowed_user_ids(), true );
+    }
+
+    /** Checks whether the current user is exempt from the restrictions. */
     private function is_allowed_user(): bool {
-        return in_array( (int) get_current_user_id(), $this->get_allowed_user_ids(), true );
+        return $this->is_allowed_id( (int) get_current_user_id() );
+    }
+
+    /** Checks whether the current user may view and change the plugin settings. */
+    private function can_manage_settings(): bool {
+        return current_user_can( 'manage_options' ) && $this->is_allowed_user();
     }
 
     /** Returns the CSS selectors to hide as a clean array. */
     private function get_hidden_selectors(): array {
-        $raw = get_option( self::OPT_SELECTORS, self::DEFAULT_SELECTORS );
+        $raw = $this->sanitize_selectors( get_option( self::OPT_SELECTORS, self::DEFAULT_SELECTORS ) );
         return array_values( array_filter( array_map( 'trim', explode( "\n", $raw ) ) ) );
     }
 
@@ -139,9 +264,15 @@ final class WP_Clean_Client_Dashboard {
     // =========================================================================
 
     /**
-     * Adds the settings sub-page under Settings (accessible to all users with manage_options).
+     * Adds the settings sub-page under Settings.
+     * Only allowed users get the page: a restricted administrator cannot open it
+     * and add themselves to the allowed list.
      */
     public function add_settings_page(): void {
+        if ( ! $this->is_allowed_user() ) {
+            return;
+        }
+
         add_options_page(
             __( 'Clean Dashboard Settings', 'wp-clean-client-dashboard' ),
             __( 'Clean Dashboard', 'wp-clean-client-dashboard' ),
@@ -152,16 +283,52 @@ final class WP_Clean_Client_Dashboard {
     }
 
     /**
+     * Capability required by options.php to save the settings group.
+     * Restricted users get a capability nobody has, so a forged POST is rejected.
+     */
+    public function settings_capability( string $capability ): string {
+        return $this->is_allowed_user() ? $capability : 'do_not_allow';
+    }
+
+    /**
+     * Discards changes to the plugin options made by a restricted user, whatever
+     * the write path. Requests without a logged-in user (WP-CLI, cron) are not affected.
+     */
+    public function keep_option_for_restricted_users( mixed $value, mixed $old_value ): mixed {
+        if ( is_user_logged_in() && ! $this->is_allowed_user() ) {
+            return $old_value;
+        }
+        return $value;
+    }
+
+    /**
+     * Warns administrators when the allowed list holds no existing administrator,
+     * which switches all restrictions off until the settings are saved again.
+     */
+    public function maybe_show_unconfigured_notice(): void {
+        if ( ! $this->is_unconfigured() || ! current_user_can( 'manage_options' ) ) {
+            return;
+        }
+
+        printf(
+            '<div class="notice notice-warning"><p>%s <a href="%s">%s</a></p></div>',
+            esc_html__( 'WP Clean Client Dashboard: no existing administrator is in the list of users excluded from restrictions, so no restriction is applied.', 'wp-clean-client-dashboard' ),
+            esc_url( admin_url( 'options-general.php?page=wpccd-settings' ) ),
+            esc_html__( 'Choose the excluded users', 'wp-clean-client-dashboard' )
+        );
+    }
+
+    /**
      * Registers options via the WordPress Settings API.
      */
     public function register_settings(): void {
         register_setting( 'wpccd_group', self::OPT_USERS, [
             'sanitize_callback' => [ $this, 'sanitize_user_ids' ],
-            'default'           => [ 1 ],
+            'default'           => [],
         ] );
 
         register_setting( 'wpccd_group', self::OPT_SELECTORS, [
-            'sanitize_callback' => 'sanitize_textarea_field',
+            'sanitize_callback' => [ $this, 'sanitize_selectors' ],
             'default'           => self::DEFAULT_SELECTORS,
         ] );
 
@@ -200,12 +367,36 @@ final class WP_Clean_Client_Dashboard {
         add_settings_field( 'wpccd_f_footer',   '', [ $this, 'render_field_footer' ],   'wpccd-settings', 'wpccd_s_footer' );
     }
 
-    /** Sanitises the array of user IDs. */
+    /**
+     * Sanitises the array of user IDs, keeping only existing users.
+     * An empty result is allowed: it leaves the plugin unconfigured (no restrictions)
+     * rather than restricting everybody.
+     */
     public function sanitize_user_ids( mixed $value ): array {
         if ( ! is_array( $value ) ) {
-            return [ 1 ];
+            return [];
         }
-        return array_values( array_map( 'intval', $value ) );
+        $ids = array_unique( array_filter( array_map( 'intval', $value ) ) );
+        return array_values( array_filter( $ids, static fn( int $id ) => false !== get_userdata( $id ) ) );
+    }
+
+    /**
+     * Sanitises the CSS selectors textarea.
+     * Selectors are printed inside a <style> block, so characters that could close
+     * the rule or the tag ({ } < ;), at-rules, backslash escapes and comment markers are removed.
+     */
+    public function sanitize_selectors( mixed $value ): string {
+        if ( ! is_string( $value ) ) {
+            return '';
+        }
+        $value = sanitize_textarea_field( $value );
+        // '>' is kept: it is harmless inside <style> and needed for child combinators.
+        // Repeated until stable, so removing one character cannot form a new "/*".
+        do {
+            $before = $value;
+            $value  = (string) preg_replace( '#[{}<;@\\\\]|/(?=\*)|\*(?=/)#', '', $value );
+        } while ( $value !== $before );
+        return $value;
     }
 
     /** Sanitises the list of menu items. */
@@ -221,13 +412,7 @@ final class WP_Clean_Client_Dashboard {
         if ( ! is_string( $value ) ) {
             return '';
         }
-        return wp_kses( trim( $value ), [
-            'a'      => [ 'href' => true, 'target' => true, 'rel' => true, 'title' => true ],
-            'strong' => [],
-            'em'     => [],
-            'span'   => [ 'style' => true ],
-            'br'     => [],
-        ] );
+        return wp_kses( trim( $value ), self::FOOTER_ALLOWED_HTML );
     }
 
     /**
@@ -242,14 +427,14 @@ final class WP_Clean_Client_Dashboard {
 
         if (
             ! wp_verify_nonce( sanitize_key( $_POST['wpccd_import_nonce'] ), 'wpccd_import' )
-            || ! current_user_can( 'manage_options' )
+            || ! $this->can_manage_settings()
         ) {
             return;
         }
 
         $redirect = admin_url( 'options-general.php?page=wpccd-settings' );
         $json     = wp_unslash( $_POST['wpccd_import_json'] ?? '' );
-        $data     = json_decode( $json, true );
+        $data     = is_string( $json ) ? json_decode( $json, true ) : null;
 
         if ( ! is_array( $data ) ) {
             wp_safe_redirect( add_query_arg( 'wpccd_notice', 'import_error', $redirect ) );
@@ -258,7 +443,7 @@ final class WP_Clean_Client_Dashboard {
 
         $map = [
             self::OPT_USERS     => [ $this, 'sanitize_user_ids' ],
-            self::OPT_SELECTORS => 'sanitize_textarea_field',
+            self::OPT_SELECTORS => [ $this, 'sanitize_selectors' ],
             self::OPT_MENUS     => [ $this, 'sanitize_menu_list' ],
             self::OPT_WIDGETS   => [ $this, 'sanitize_menu_list' ],
             self::OPT_ADMIN_BAR => [ $this, 'sanitize_menu_list' ],
@@ -322,15 +507,15 @@ final class WP_Clean_Client_Dashboard {
 
     public function render_section_adminbar_intro(): void {
         echo '<p class="description">'
-            . esc_html__( 'Select admin bar nodes to hide from unauthorised users — on both frontend and backend.', 'wp-clean-client-dashboard' )
-            . ' <span style="background:#72aee6;color:#fff;font-size:11px;padding:1px 6px;border-radius:3px">admin</span> '
+            . esc_html__( 'Select admin bar nodes to hide from unauthorised users, on both frontend and backend.', 'wp-clean-client-dashboard' )
+            . ' ' . $this->admin_bar_context_badge( true, false ) . ' '
             . esc_html__( 'visible only in wp-admin', 'wp-clean-client-dashboard' )
-            . ' &nbsp; <span style="background:#00a32a;color:#fff;font-size:11px;padding:1px 6px;border-radius:3px">frontend</span> '
+            . ' &nbsp; ' . $this->admin_bar_context_badge( false, true ) . ' '
             . esc_html__( 'visible only on the site', 'wp-clean-client-dashboard' )
-            . ' &nbsp; <span style="background:#646970;color:#fff;font-size:11px;padding:1px 6px;border-radius:3px">both</span> '
+            . ' &nbsp; ' . $this->admin_bar_context_badge( true, true ) . ' '
             . esc_html__( 'visible everywhere', 'wp-clean-client-dashboard' )
             . '<br><em style="font-size:12px">'
-            . esc_html__( 'The list grows automatically as you browse — visit frontend pages to discover plugin nodes that appear there.', 'wp-clean-client-dashboard' )
+            . esc_html__( 'The list grows automatically as you browse: visit frontend pages to discover plugin nodes that appear there.', 'wp-clean-client-dashboard' )
             . '</em></p>';
     }
 
@@ -352,7 +537,7 @@ final class WP_Clean_Client_Dashboard {
         $opt   = self::OPT_ADMIN_BAR;
 
         // Sort alphabetically by title
-        uasort( $cached, fn( $a, $b ) => strcmp( $a['title'], $b['title'] ) );
+        uasort( $cached, fn( $a, $b ) => strcmp( (string) ( $a['title'] ?? '' ), (string) ( $b['title'] ?? '' ) ) );
 
         echo '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:6px 20px;max-width:900px">';
         foreach ( $cached as $id => $data ) {
@@ -367,7 +552,7 @@ final class WP_Clean_Client_Dashboard {
                 esc_attr( $opt ),
                 esc_attr( $id ),
                 checked( $checked, true, false ),
-                esc_html( $data['title'] ?: $id ),
+                esc_html( ( $data['title'] ?? '' ) ?: $id ),
                 $badge, // already escaped in admin_bar_context_badge()
                 esc_html( $id )
             );
@@ -386,12 +571,12 @@ final class WP_Clean_Client_Dashboard {
         $style = 'font-size:11px;padding:1px 6px;border-radius:3px;color:#fff;white-space:nowrap';
 
         if ( $admin && $frontend ) {
-            return '<span style="background:#646970;' . $style . '">both</span>';
+            return '<span style="background:#646970;' . $style . '">' . esc_html__( 'both', 'wp-clean-client-dashboard' ) . '</span>';
         }
         if ( $admin ) {
-            return '<span style="background:#72aee6;' . $style . '">admin</span>';
+            return '<span style="background:#72aee6;' . $style . '">' . esc_html__( 'admin', 'wp-clean-client-dashboard' ) . '</span>';
         }
-        return '<span style="background:#00a32a;' . $style . '">frontend</span>';
+        return '<span style="background:#00a32a;' . $style . '">' . esc_html__( 'frontend', 'wp-clean-client-dashboard' ) . '</span>';
     }
 
     public function render_section_menus_intro(): void {
@@ -400,10 +585,10 @@ final class WP_Clean_Client_Dashboard {
             . '</p>';
     }
 
-    /** Renders checkboxes for each WordPress user. */
+    /** Renders a checkbox for each administrator (users with manage_options). */
     public function render_field_users(): void {
         $saved = $this->get_allowed_user_ids();
-        $users = get_users( [ 'orderby' => 'display_name', 'number' => 500 ] );
+        $users = get_users( [ 'capability' => 'manage_options', 'orderby' => 'display_name', 'number' => 500 ] );
         $opt   = self::OPT_USERS;
 
         echo '<fieldset>';
@@ -413,7 +598,7 @@ final class WP_Clean_Client_Dashboard {
                 '<label style="display:block;margin-bottom:6px">'
                     . '<input type="checkbox" name="%s[]" value="%d"%s> '
                     . '<strong>%s</strong> '
-                    . '<span style="color:#888;font-size:12px">(ID: %d &mdash; %s)</span>'
+                    . '<span style="color:#888;font-size:12px">(ID: %d, %s)</span>'
                 . '</label>',
                 esc_attr( $opt ),
                 (int) $user->ID,
@@ -424,7 +609,9 @@ final class WP_Clean_Client_Dashboard {
             );
         }
         echo '</fieldset>';
-        echo '<p class="description">' . esc_html__( 'Selected users will see notices and updates as normal.', 'wp-clean-client-dashboard' ) . '</p>';
+        echo '<p class="description">'
+            . esc_html__( 'Selected users will see notices and updates as normal, and are the only ones who can open this page. Keep at least one selected: with none, no restriction is applied.', 'wp-clean-client-dashboard' )
+            . '</p>';
     }
 
     /**
@@ -454,7 +641,7 @@ final class WP_Clean_Client_Dashboard {
             $top_title = wp_strip_all_tags( $item[0] ?? '' );
 
             // Skip separators and empty items.
-            // Note: options-general.php (Settings) is intentionally included — allowed users
+            // Note: options-general.php (Settings) is intentionally included: allowed users
             // always see the full menu regardless, so hiding it only affects restricted users.
             if ( empty( $top_title ) || str_starts_with( $top_slug, 'separator' ) ) {
                 continue;
@@ -549,14 +736,7 @@ final class WP_Clean_Client_Dashboard {
      * Shows a live preview if text is already saved.
      */
     public function render_field_footer(): void {
-        $value   = $this->get_footer_text();
-        $allowed = [
-            'a'      => [ 'href' => true, 'target' => true, 'rel' => true, 'title' => true ],
-            'strong' => [],
-            'em'     => [],
-            'span'   => [ 'style' => true ],
-            'br'     => [],
-        ];
+        $value = $this->get_footer_text();
 
         printf(
             '<textarea name="%s" rows="3" class="large-text" spellcheck="false" placeholder="%s">%s</textarea>',
@@ -575,14 +755,14 @@ final class WP_Clean_Client_Dashboard {
         if ( ! empty( $value ) ) {
             echo '<p style="margin-top:8px;padding:8px 12px;background:#f6f7f7;border-left:3px solid #72aee6;font-size:13px">'
                 . '<em style="color:#646970;margin-right:6px">' . esc_html__( 'Preview:', 'wp-clean-client-dashboard' ) . '</em>'
-                . wp_kses( $value, $allowed )
+                . wp_kses( $value, self::FOOTER_ALLOWED_HTML )
                 . '</p>';
         }
     }
 
     /** Renders the settings page. */
     public function render_settings_page(): void {
-        if ( ! current_user_can( 'manage_options' ) ) {
+        if ( ! $this->can_manage_settings() ) {
             return;
         }
 
@@ -598,14 +778,15 @@ final class WP_Clean_Client_Dashboard {
 
             <?php
             // phpcs:disable WordPress.Security.NonceVerification.Recommended
-            if ( isset( $_GET['wpccd_notice'] ) ) {
-                if ( 'import_ok' === $_GET['wpccd_notice'] ) {
+            $notice = isset( $_GET['wpccd_notice'] ) ? sanitize_key( $_GET['wpccd_notice'] ) : '';
+            if ( $notice ) {
+                if ( 'import_ok' === $notice ) {
                     echo '<div class="notice notice-success is-dismissible"><p>'
                         . esc_html__( 'Settings imported successfully.', 'wp-clean-client-dashboard' )
                         . '</p></div>';
-                } elseif ( 'import_error' === $_GET['wpccd_notice'] ) {
+                } elseif ( 'import_error' === $notice ) {
                     echo '<div class="notice notice-error is-dismissible"><p>'
-                        . esc_html__( 'Invalid JSON — please check your export and try again.', 'wp-clean-client-dashboard' )
+                        . esc_html__( 'Invalid JSON: please check your export and try again.', 'wp-clean-client-dashboard' )
                         . '</p></div>';
                 }
             }
@@ -616,11 +797,14 @@ final class WP_Clean_Client_Dashboard {
                 <p style="margin:0 0 8px">
                     <?php esc_html_e( 'Cleans up the WordPress admin for non-technical users. Excluded users keep full access. All other admins will have: update capabilities blocked · notices hidden · admin menu and admin bar items selectively removed · dashboard widgets hideable · Help tab suppressed · WP logo replaced with the site favicon · custom footer branding.', 'wp-clean-client-dashboard' ); ?>
                 </p>
+                <p style="margin:0 0 8px">
+                    <?php esc_html_e( 'This is interface cleanup, not access control: restricted users are still administrators. Update notices are hidden from them too, so an excluded user must keep WordPress, plugins and themes up to date.', 'wp-clean-client-dashboard' ); ?>
+                </p>
                 <p style="margin:0;font-size:13px;color:#646970">
                     <?php
                     printf(
                         /* translators: 1: display name, 2: user ID, 3: coloured status label */
-                        esc_html__( 'You are logged in as %1$s (ID: %2$d) — %3$s', 'wp-clean-client-dashboard' ),
+                        esc_html__( 'You are logged in as %1$s (ID: %2$d): %3$s', 'wp-clean-client-dashboard' ),
                         '<strong>' . esc_html( $current_user->display_name ) . '</strong>',
                         (int) $current_user->ID,
                         '<strong style="color:' . esc_attr( $status_colour ) . '">' . esc_html( $status_label ) . '</strong>'
@@ -640,7 +824,7 @@ final class WP_Clean_Client_Dashboard {
             <?php
             /* ---- Export / Import ---- */
             $export_data = [
-                self::OPT_USERS     => $this->get_allowed_user_ids(),
+                self::OPT_USERS     => $this->get_saved_user_ids(),
                 self::OPT_SELECTORS => get_option( self::OPT_SELECTORS, self::DEFAULT_SELECTORS ),
                 self::OPT_MENUS     => $this->get_hidden_menus(),
                 self::OPT_WIDGETS   => $this->get_hidden_widgets(),
@@ -679,14 +863,14 @@ final class WP_Clean_Client_Dashboard {
     // =========================================================================
 
     /**
-     * Replaces the left footer text with Diego Vagnoli branding for unauthorised users.
+     * Replaces the left footer text with the configured text for unauthorised users.
      * Allowed users keep the default WordPress footer.
      */
     public function custom_admin_footer( string $text ): string {
         if ( $this->is_allowed_user() ) {
             return $text;
         }
-        // Returns the configured text (may be empty — empty = no footer branding).
+        // Returns the configured text (may be empty: empty = no footer branding).
         return $this->get_footer_text();
     }
 
@@ -714,7 +898,7 @@ final class WP_Clean_Client_Dashboard {
      * the default WP logo is left intact.
      */
     public function replace_wp_logo_with_favicon(): void {
-        if ( $this->is_allowed_user() ) {
+        if ( ! is_admin_bar_showing() || $this->is_allowed_user() ) {
             return;
         }
 
@@ -756,13 +940,18 @@ final class WP_Clean_Client_Dashboard {
         $selectors = $this->get_hidden_selectors();
         if ( ! empty( $selectors ) ) {
             add_action( 'admin_head', static function () use ( $selectors ) {
-                // Selectors are saved by an admin; wp_strip_all_tags as light sanitisation.
-                $safe = implode( ', ', array_map( 'wp_strip_all_tags', $selectors ) );
+                // Selectors went through sanitize_selectors(): no characters left that can break out of the rule.
+                $safe = implode( ', ', $selectors );
                 echo '<style>' . $safe . '{display:none!important}</style>' . "\n"; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
             } );
         }
 
-        if ( self::HIDE_ALL_NOTICES ) {
+        /**
+         * Filters whether every admin notice is removed for restricted users.
+         *
+         * @param bool $hide_all Default true. Return false to hide only the configured CSS selectors.
+         */
+        if ( apply_filters( 'wpccd_hide_all_notices', self::HIDE_ALL_NOTICES ) ) {
             remove_all_actions( 'admin_notices' );
             remove_all_actions( 'all_admin_notices' );
         }
@@ -785,7 +974,7 @@ final class WP_Clean_Client_Dashboard {
     }
 
     /**
-     * (3) Blocks update / install / customizer capabilities for unauthorised users.
+     * (3) Blocks update / install / file editing / customizer capabilities for unauthorised users.
      *
      * @param bool[]   $allcaps User capabilities.
      * @param string[] $caps    Required capabilities.
@@ -794,24 +983,24 @@ final class WP_Clean_Client_Dashboard {
      * @return bool[]
      */
     public function block_update_caps( array $allcaps, array $caps, array $args, WP_User $user ): array {
-        if ( isset( $user->ID ) && in_array( (int) $user->ID, $this->get_allowed_user_ids(), true ) ) {
+        if ( empty( $user->ID ) || $this->is_allowed_id( (int) $user->ID ) ) {
             return $allcaps;
         }
 
-        $blocked = [
-            'update_core',
-            'update_plugins',
-            'update_themes',
-            'install_plugins',
-            'install_themes',
-            'delete_plugins',
-            'delete_themes',
-            'customize',
-            // Uncomment to also block plugin activation / zip upload:
-            // 'activate_plugins',
-        ];
+        if ( null === $this->blocked_caps ) {
+            // Set the defaults first: a callback that calls current_user_can() re-enters
+            // this filter and must find a value instead of recursing.
+            $this->blocked_caps = self::DEFAULT_BLOCKED_CAPS;
 
-        foreach ( $blocked as $cap ) {
+            /**
+             * Filters the capabilities removed from restricted users.
+             *
+             * @param string[] $blocked Capability names. Add 'activate_plugins' to also hide the Plugins screen actions.
+             */
+            $this->blocked_caps = (array) apply_filters( 'wpccd_blocked_caps', self::DEFAULT_BLOCKED_CAPS );
+        }
+
+        foreach ( $this->blocked_caps as $cap ) {
             $allcaps[ $cap ] = false;
         }
 
@@ -845,7 +1034,7 @@ final class WP_Clean_Client_Dashboard {
         }
 
         // Robust removal: delete any sub-menu under themes.php whose slug starts
-        // with "customize.php" — covers querystring variants like customize.php?return=...
+        // with "customize.php": covers querystring variants like customize.php?return=...
         if ( $robust_customize && ! empty( $submenu['themes.php'] ) ) {
             foreach ( $submenu['themes.php'] as $i => $item ) {
                 $slug = $item[2] ?? '';
@@ -915,7 +1104,7 @@ final class WP_Clean_Client_Dashboard {
         foreach ( $contexts as $priorities ) {
             foreach ( $priorities as $items ) {
                 foreach ( $items as $id => $widget ) {
-                    // WordPress sets removed widgets to false — skip them.
+                    // WordPress sets removed widgets to false, skip them.
                     if ( ! empty( $widget ) && ! isset( $widgets[ $id ] ) ) {
                         $widgets[ $id ] = wp_strip_all_tags( $widget['title'] ?? $id );
                     }
@@ -951,7 +1140,7 @@ final class WP_Clean_Client_Dashboard {
      * Caches all top-level admin bar nodes into a transient (24 h).
      * Runs at priority 998 on wp_before_admin_bar_render (after all plugins have
      * added their nodes, before our own removal at 999), on every page load for
-     * allowed users. The transient is merged — not overwritten — so the list
+     * allowed users. The transient is merged, not overwritten, so the list
      * grows incrementally as the user browses both admin and frontend.
      */
     public function cache_admin_bar_nodes(): void {
@@ -966,7 +1155,7 @@ final class WP_Clean_Client_Dashboard {
             return;
         }
 
-        // Collect IDs of group nodes whose parent is root — these are the
+        // Collect IDs of group nodes whose parent is root: these are the
         // "sections" of the bar (e.g. top-secondary). Their children count
         // as top-level visually.
         $root_groups = [];
@@ -1009,7 +1198,7 @@ final class WP_Clean_Client_Dashboard {
                 ];
                 $updated = true;
             } elseif ( ! $cached[ $id ][ $context ] ) {
-                // Node already known — just update the context flag.
+                // Node already known: just update the context flag.
                 $cached[ $id ][ $context ] = true;
                 $updated = true;
             }
@@ -1037,4 +1226,5 @@ final class WP_Clean_Client_Dashboard {
     }
 }
 
+register_activation_hook( __FILE__, [ 'WP_Clean_Client_Dashboard', 'activate' ] );
 WP_Clean_Client_Dashboard::init();

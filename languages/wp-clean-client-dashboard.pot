@@ -1,12 +1,12 @@
-# WP Clean Client Dashboard — Translation Template
-# Copyright (C) 2026 Diego Vagnoli (https://diegovagnoli.it)
-# This file is distributed under the GPL-2.0-or-later licence.
+# WP Clean Client Dashboard translation template
+# Copyright (C) 2026 Diego Vagnoli
+# This file is distributed under the GPL-2.0-or-later license.
 #
 msgid ""
 msgstr ""
-"Project-Id-Version: WP Clean Client Dashboard 1.3.0\n"
-"Report-Msgid-Bugs-To: https://diegovagnoli.it\n"
-"POT-Creation-Date: 2026-02-28 00:00+0000\n"
+"Project-Id-Version: WP Clean Client Dashboard 1.4.0\n"
+"Report-Msgid-Bugs-To: https://github.com/bluantinoo/wp-clean-client-dashboard/issues\n"
+"POT-Creation-Date: 2026-11-17 00:00+0000\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -24,159 +24,184 @@ msgstr ""
 msgid "Hides notices, blocks updates, hides menu items and cleans the admin UI for all users except designated ones."
 msgstr ""
 
-#: wp-clean-client-dashboard.php
+#: wp-clean-client-dashboard.php:277 wp-clean-client-dashboard.php:777
 msgid "Clean Dashboard Settings"
 msgstr ""
 
-#: wp-clean-client-dashboard.php
+#: wp-clean-client-dashboard.php:278
 msgid "Clean Dashboard"
 msgstr ""
 
-#: wp-clean-client-dashboard.php
+#: wp-clean-client-dashboard.php:315
+msgid "WP Clean Client Dashboard: no existing administrator is in the list of users excluded from restrictions, so no restriction is applied."
+msgstr ""
+
+#: wp-clean-client-dashboard.php:317
+msgid "Choose the excluded users"
+msgstr ""
+
+#: wp-clean-client-dashboard.php:355
 msgid "Users excluded from restrictions"
 msgstr ""
 
-#: wp-clean-client-dashboard.php
+#: wp-clean-client-dashboard.php:356
 msgid "Dashboard widgets to hide"
 msgstr ""
 
-#: wp-clean-client-dashboard.php
+#: wp-clean-client-dashboard.php:357
 msgid "Menu items to hide"
 msgstr ""
 
-#: wp-clean-client-dashboard.php
+#: wp-clean-client-dashboard.php:358
 msgid "Admin bar nodes to hide"
 msgstr ""
 
-#: wp-clean-client-dashboard.php
+#: wp-clean-client-dashboard.php:359
 msgid "CSS selectors to hide"
 msgstr ""
 
-#: wp-clean-client-dashboard.php
-msgid "Select dashboard widgets to hide from unauthorised users. The list is built the first time an allowed user visits the Dashboard."
-msgstr ""
-
-#: wp-clean-client-dashboard.php
-msgid "No widgets found yet. Visit the Dashboard page once as an allowed user to populate this list."
-msgstr ""
-
-#: wp-clean-client-dashboard.php
-msgid "The widget ID is shown in grey next to the title."
-msgstr ""
-
-#: wp-clean-client-dashboard.php
-msgid "Select admin bar nodes to hide from unauthorised users — on both frontend and backend."
-msgstr ""
-
-#: wp-clean-client-dashboard.php
-msgid "visible only in wp-admin"
-msgstr ""
-
-#: wp-clean-client-dashboard.php
-msgid "visible only on the site"
-msgstr ""
-
-#: wp-clean-client-dashboard.php
-msgid "visible everywhere"
-msgstr ""
-
-#: wp-clean-client-dashboard.php
-msgid "The list grows automatically as you browse — visit frontend pages to discover plugin nodes that appear there."
-msgstr ""
-
-#: wp-clean-client-dashboard.php
-msgid "No nodes found yet. Navigate any page as an allowed user to populate this list."
-msgstr ""
-
-#: wp-clean-client-dashboard.php
-msgid "Hiding a top-level node also removes its dropdown children."
-msgstr ""
-
-#: wp-clean-client-dashboard.php
-msgid "Select items to hide from unauthorised users. ★ = enabled by default."
-msgstr ""
-
-#: wp-clean-client-dashboard.php
-msgid "Selected users will see notices and updates as normal."
-msgstr ""
-
-#: wp-clean-client-dashboard.php
-msgid "No menu items available."
-msgstr ""
-
-#: wp-clean-client-dashboard.php
-msgid "★ = hidden by default. Checking a top-level item hides it entirely, including its sub-items."
-msgstr ""
-
-#: wp-clean-client-dashboard.php
-msgid "One CSS selector per line. Hidden with display:none for unauthorised users."
-msgstr ""
-
-#: wp-clean-client-dashboard.php
-msgid "Cleans up the WordPress admin for non-technical users. Excluded users keep full access. All other admins will have: update capabilities blocked · notices hidden · admin menu and admin bar items selectively removed · dashboard widgets hideable · Help tab suppressed · WP logo replaced with the site favicon · custom footer branding."
-msgstr ""
-
-#: wp-clean-client-dashboard.php
-msgid "Full access"
-msgstr ""
-
-#: wp-clean-client-dashboard.php
-msgid "Restricted"
-msgstr ""
-
-#: wp-clean-client-dashboard.php
-#. translators: 1: display name, 2: user ID, 3: coloured status label
-msgid "You are logged in as %1$s (ID: %2$d) — %3$s"
-msgstr ""
-
-#: wp-clean-client-dashboard.php
-msgid "Save settings"
-msgstr ""
-
-#: wp-clean-client-dashboard.php
-msgid "Settings imported successfully."
-msgstr ""
-
-#: wp-clean-client-dashboard.php
-msgid "Invalid JSON — please check your export and try again."
-msgstr ""
-
-#: wp-clean-client-dashboard.php
-msgid "Export / Import settings"
-msgstr ""
-
-#: wp-clean-client-dashboard.php
-msgid "Export"
-msgstr ""
-
-#: wp-clean-client-dashboard.php
-msgid "Copy the JSON below to back up or transfer your settings to another site."
-msgstr ""
-
-#: wp-clean-client-dashboard.php
-msgid "Import"
-msgstr ""
-
-#: wp-clean-client-dashboard.php
-msgid "Paste a previously exported JSON to restore settings. This will overwrite current values."
-msgstr ""
-
-#: wp-clean-client-dashboard.php
-msgid "Import settings"
-msgstr ""
-
-#: wp-clean-client-dashboard.php
+#: wp-clean-client-dashboard.php:360
 msgid "Custom footer text"
 msgstr ""
 
-#: wp-clean-client-dashboard.php
+#: wp-clean-client-dashboard.php:465
+msgid "Select dashboard widgets to hide from unauthorised users. The list is built the first time an allowed user visits the Dashboard."
+msgstr ""
+
+#: wp-clean-client-dashboard.php:479
+msgid "No widgets found yet. Visit the Dashboard page once as an allowed user to populate this list."
+msgstr ""
+
+#: wp-clean-client-dashboard.php:504
+msgid "The widget ID is shown in grey next to the title."
+msgstr ""
+
+#: wp-clean-client-dashboard.php:510
+msgid "Select admin bar nodes to hide from unauthorised users, on both frontend and backend."
+msgstr ""
+
+#: wp-clean-client-dashboard.php:512
+msgid "visible only in wp-admin"
+msgstr ""
+
+#: wp-clean-client-dashboard.php:514
+msgid "visible only on the site"
+msgstr ""
+
+#: wp-clean-client-dashboard.php:516
+msgid "visible everywhere"
+msgstr ""
+
+#: wp-clean-client-dashboard.php:518
+msgid "The list grows automatically as you browse: visit frontend pages to discover plugin nodes that appear there."
+msgstr ""
+
+#: wp-clean-client-dashboard.php:531
+msgid "No nodes found yet. Navigate any page as an allowed user to populate this list."
+msgstr ""
+
+#: wp-clean-client-dashboard.php:562
+msgid "Hiding a top-level node also removes its dropdown children."
+msgstr ""
+
+#: wp-clean-client-dashboard.php:574
+msgid "both"
+msgstr ""
+
+#: wp-clean-client-dashboard.php:577
+msgid "admin"
+msgstr ""
+
+#: wp-clean-client-dashboard.php:579
+msgid "frontend"
+msgstr ""
+
+#: wp-clean-client-dashboard.php:584
+msgid "Select items to hide from unauthorised users. ★ = enabled by default."
+msgstr ""
+
+#: wp-clean-client-dashboard.php:613
+msgid "Selected users will see notices and updates as normal, and are the only ones who can open this page. Keep at least one selected: with none, no restriction is applied."
+msgstr ""
+
+#: wp-clean-client-dashboard.php:625
+msgid "No menu items available."
+msgstr ""
+
+#: wp-clean-client-dashboard.php:716
+msgid "★ = hidden by default. Checking a top-level item hides it entirely, including its sub-items."
+msgstr ""
+
+#: wp-clean-client-dashboard.php:729
+msgid "One CSS selector per line. Hidden with display:none for unauthorised users."
+msgstr ""
+
+#: wp-clean-client-dashboard.php:749
 msgid "Shown in the admin footer for restricted users. Leave empty to display no footer text."
 msgstr ""
 
-#: wp-clean-client-dashboard.php
+#: wp-clean-client-dashboard.php:751
 msgid "Allowed HTML:"
 msgstr ""
 
-#: wp-clean-client-dashboard.php
+#: wp-clean-client-dashboard.php:757
 msgid "Preview:"
+msgstr ""
+
+#: wp-clean-client-dashboard.php:773
+msgid "Full access"
+msgstr ""
+
+#: wp-clean-client-dashboard.php:774
+msgid "Restricted"
+msgstr ""
+
+#: wp-clean-client-dashboard.php:785
+msgid "Settings imported successfully."
+msgstr ""
+
+#: wp-clean-client-dashboard.php:789
+msgid "Invalid JSON: please check your export and try again."
+msgstr ""
+
+#: wp-clean-client-dashboard.php:798
+msgid "Cleans up the WordPress admin for non-technical users. Excluded users keep full access. All other admins will have: update capabilities blocked · notices hidden · admin menu and admin bar items selectively removed · dashboard widgets hideable · Help tab suppressed · WP logo replaced with the site favicon · custom footer branding."
+msgstr ""
+
+#: wp-clean-client-dashboard.php:801
+msgid "This is interface cleanup, not access control: restricted users are still administrators. Update notices are hidden from them too, so an excluded user must keep WordPress, plugins and themes up to date."
+msgstr ""
+
+#. translators: 1: display name, 2: user ID, 3: coloured status label
+#: wp-clean-client-dashboard.php:807
+#, php-format
+msgid "You are logged in as %1$s (ID: %2$d): %3$s"
+msgstr ""
+
+#: wp-clean-client-dashboard.php:820
+msgid "Save settings"
+msgstr ""
+
+#: wp-clean-client-dashboard.php:838
+msgid "Export / Import settings"
+msgstr ""
+
+#: wp-clean-client-dashboard.php:842
+msgid "Export"
+msgstr ""
+
+#: wp-clean-client-dashboard.php:843
+msgid "Copy the JSON below to back up or transfer your settings to another site."
+msgstr ""
+
+#: wp-clean-client-dashboard.php:846
+msgid "Import"
+msgstr ""
+
+#: wp-clean-client-dashboard.php:847
+msgid "Paste a previously exported JSON to restore settings. This will overwrite current values."
+msgstr ""
+
+#: wp-clean-client-dashboard.php:851
+msgid "Import settings"
 msgstr ""

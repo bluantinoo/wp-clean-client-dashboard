@@ -1,0 +1,24 @@
+<?php
+/**
+ * Removes the plugin options and cached lists when the plugin is deleted.
+ *
+ * @package WP_Clean_Client_Dashboard
+ */
+
+if ( ! defined( 'WP_UNINSTALL_PLUGIN' ) ) {
+    exit;
+}
+
+foreach ( [
+    'wpccd_allowed_users',
+    'wpccd_hidden_selectors',
+    'wpccd_hidden_menus',
+    'wpccd_hidden_widgets',
+    'wpccd_hidden_admin_bar_nodes',
+    'wpccd_footer_text',
+] as $option ) {
+    delete_option( $option );
+}
+
+delete_transient( 'wpccd_dashboard_widgets' );
+delete_transient( 'wpccd_admin_bar_nodes' );

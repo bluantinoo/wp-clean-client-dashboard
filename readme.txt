@@ -1,10 +1,10 @@
 === WP Clean Client Dashboard ===
 Contributors: diegovagnoli
-Tags: admin, dashboard, cleanup, client, restrict
-Requires at least: 5.0
-Tested up to: 6.7
+Tags: admin, dashboard, cleanup, client, white label
+Requires at least: 6.0
+Tested up to: 7.1
 Requires PHP: 8.0
-Stable tag: 1.3.0
+Stable tag: 1.4.0
 License: GPL-2.0-or-later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -12,55 +12,66 @@ Cleans up the WordPress admin for clients and non-technical users, while leaving
 
 == Description ==
 
-**WP Clean Client Dashboard** lets you designate one or more trusted users who keep full, unrestricted access to WordPress. Everyone else gets a tidied-up admin experience:
+**WP Clean Client Dashboard** lets you designate one or more trusted administrators who keep the full, unchanged WordPress admin. Everyone else gets a tidied-up admin:
 
-* **Notices hidden** — all admin notices are suppressed so the dashboard stays clean.
-* **Updates blocked** — capabilities for updating core, plugins and themes are removed, preventing accidental breakage.
-* **Admin menu trimmed** — choose which top-level menu items and sub-pages to hide. A set of risky pages (Theme Editor, Customizer, Site Editor, Updates) is hidden by default.
-* **Admin bar cleaned** — select which admin bar nodes to remove on both the frontend and the backend. The WP logo is replaced with the site favicon and links to the frontend (in admin) or to the dashboard (on the frontend).
-* **Dashboard widgets hidden** — tick which widgets to remove from the Dashboard home screen.
-* **Help tab suppressed** — the contextual Help tab is hidden.
-* **Custom footer branding** — set a custom footer message (supports links and basic HTML) for restricted users.
-* **CSS selectors** — hide any element by CSS selector for extra fine-tuning.
-* **Export / Import** — back up or transfer all settings between sites via JSON.
+* **Notices hidden**: all admin notices are suppressed, or only the ones you target by CSS selector.
+* **Updates blocked**: the capabilities to update, install and delete core, plugins and themes, and to use the file editors, are removed. The Customizer redirects to the Dashboard.
+* **Admin menu trimmed**: choose which top-level menu items and sub-pages to hide. Updates, Theme File Editor, Site Editor and Customizer are hidden by default.
+* **Admin bar cleaned**: choose which admin bar nodes to remove, on both the frontend and the backend. The WordPress logo is replaced with the site icon and links to the frontend (in admin) or to the dashboard (on the frontend).
+* **Dashboard widgets hidden**: tick which widgets to remove from the Dashboard home screen.
+* **Help tab suppressed.**
+* **Custom footer text** (links and basic HTML allowed).
+* **Export / Import** of all settings as JSON.
 
-No page builders, no upsells, no tracking. One file, zero dependencies beyond WordPress itself.
+No page builders, no upsells, no tracking. One file, no dependencies beyond WordPress itself.
+
+= What this plugin is not =
+
+It is interface cleanup, **not access control**. Restricted users are still administrators: they can reach pages by URL, deactivate this plugin from the Plugins screen, or use any capability that is not blocked. If you need to stop an administrator from doing something, give them a different role, or use `DISALLOW_FILE_MODS` and `DISALLOW_FILE_EDIT` in `wp-config.php`.
+
+Update notices are hidden from restricted users too. Someone on the excluded list has to keep WordPress, plugins and themes up to date, or automatic updates have to be on.
 
 == Installation ==
 
 1. Upload the `wp-clean-client-dashboard` folder to `/wp-content/plugins/`.
-2. Activate the plugin through the **Plugins** screen.
-3. Go to **Settings → Clean Dashboard**.
-4. Under **Users excluded from restrictions**, tick the administrator accounts that should keep full access (your own account first).
-5. Save settings — restricted users will immediately see the cleaned-up interface.
+2. Activate the plugin through the **Plugins** screen. The user who activates it becomes the first excluded user (activated from WP-CLI without `--user`, the plugin starts unconfigured and asks for one).
+3. Go to **Settings > Clean Dashboard**.
+4. Under **Users excluded from restrictions**, tick the administrators who should keep full access.
+5. Save settings: restricted users see the cleaned-up interface right away.
 
 **Recommended first steps:**
 
-* Visit **Dashboard** as an allowed user at least once so the widget list is populated.
-* Browse a frontend page as an allowed user to discover admin bar nodes added by other plugins.
-* Set a custom footer message under **Custom footer text** (or leave it empty for no footer).
+* Visit **Dashboard** once as an excluded user, so the widget list is populated.
+* Browse a few frontend pages as an excluded user, to discover admin bar nodes added by other plugins.
+* Set a footer text under **Custom footer text**, or leave it empty for no footer text.
 
 == Frequently Asked Questions ==
 
-= Will this plugin affect my own account? =
+= Who can open the settings page? =
 
-Only if you do not add yourself to the **Users excluded from restrictions** list. Always add your own user ID before saving.
+Only the excluded users. A restricted administrator does not see the page, and changes to the plugin options made by a logged-in restricted user are discarded whatever the write path, so they cannot add themselves to the list. WP-CLI and cron run without a logged-in user and are not affected.
 
-= Can I hide the plugin's own settings page from clients? =
+= What if no excluded user exists any more? =
 
-Yes — tick **Settings** (options-general.php) in the menu removal section. Allowed users will always see it regardless.
+If none of the saved users is an existing administrator (the user was deleted or demoted, or a database migration renumbered the users), the plugin restricts nobody and shows a warning to every administrator until the list is saved again. It never locks all administrators out of its own settings. This also means a restricted administrator who deletes or demotes the excluded users switches the restrictions off.
 
-= The widget or admin bar list is empty — why? =
+= The widget or admin bar list is empty. Why? =
 
-These lists are built automatically as an allowed user browses. Visit the Dashboard page and a few frontend pages once, then come back to the settings.
+These lists are built as an excluded user browses. Visit the Dashboard and a few frontend pages once, then come back to the settings.
 
 = Does it affect frontend visitors or logged-out users? =
 
-No. All restrictions apply only to logged-in WordPress users who are not on the allowed list.
+No. Restrictions apply only to logged-in users who are not on the excluded list.
 
-= Can I transfer settings to another site? =
+= Can I block more capabilities? =
 
-Yes. Use the **Export / Import** section at the bottom of the settings page to copy a JSON snapshot between installations.
+Yes, with the `wpccd_blocked_caps` filter. For example, to also block plugin activation:
+
+`add_filter( 'wpccd_blocked_caps', fn( $caps ) => array_merge( $caps, [ 'activate_plugins' ] ) );`
+
+= Can I keep some notices visible? =
+
+Return `false` from the `wpccd_hide_all_notices` filter. Only the notices matching the CSS selectors in the settings are then hidden.
 
 = What HTML is allowed in the custom footer? =
 
@@ -68,10 +79,24 @@ Yes. Use the **Export / Import** section at the bottom of the settings page to c
 
 == Screenshots ==
 
-1. Settings page — user exclusion, menu removal and admin bar node selection.
-2. Dashboard as seen by a restricted user — clean, no notices, no update badges.
+1. Settings page: excluded users, menu items and admin bar nodes.
+2. Dashboard as seen by a restricted user.
 
 == Changelog ==
+
+= 1.4.0 =
+* Changed: the settings page is available only to excluded users, and changes to the plugin options made by a logged-in restricted user are discarded, whatever the write path.
+* Changed: when no saved user is an existing administrator, the plugin restricts nobody and shows a warning, instead of silently restricting everybody.
+* Changed: on a new install the activating user is stored as the first excluded user (none when activated without a user, e.g. from WP-CLI). User ID 1 is used only on sites upgraded from an older version that never saved the list.
+* Changed: only administrators are listed as candidates for the excluded list.
+* Changed: the file editor capabilities (`edit_plugins`, `edit_themes`, `edit_files`) are blocked for restricted users.
+* Changed: no default CSS selector, and the Hello Elementor menu is no longer hidden by default. Existing saved settings are not touched.
+* Added: `wpccd_blocked_caps` and `wpccd_hide_all_notices` filters.
+* Added: uninstall cleanup of options and transients.
+* Fixed: CSS selectors are sanitised so they cannot break out of the style block.
+* Fixed: importing a malformed request no longer causes a PHP TypeError.
+* Fixed: the favicon style is no longer printed for logged-out visitors.
+* Fixed: warning when a cached admin bar node had no title.
 
 = 1.3.0 =
 * Added: WP logo replaced with site favicon in the admin bar for restricted users.
@@ -81,7 +106,7 @@ Yes. Use the **Export / Import** section at the bottom of the settings page to c
 * Added: Export / Import settings via JSON.
 * Added: Settings menu (options-general.php) now available in the menu removal list.
 * Improved: WP logo dropdown children (About WordPress, external links) fully removed.
-* Improved: WP logo link is context-aware — goes to the frontend from admin and vice versa.
+* Improved: WP logo link is context-aware: it goes to the frontend from admin and vice versa.
 
 = 1.2.0 =
 * Added: Admin bar items removal tied to hidden menu entries (Updates, Customizer).
@@ -99,5 +124,5 @@ Yes. Use the **Export / Import** section at the bottom of the settings page to c
 
 == Upgrade Notice ==
 
-= 1.3.0 =
-New: favicon replacement, widget/admin bar discovery lists, configurable footer, JSON export/import. No breaking changes — existing settings are preserved.
+= 1.4.0 =
+The settings page is now visible only to excluded users, and file editors are blocked for restricted users. Check the excluded list after updating: if it holds no existing administrator, restrictions switch off until you save it.
