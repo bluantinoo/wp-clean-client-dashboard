@@ -4,7 +4,7 @@
 #
 msgid ""
 msgstr ""
-"Project-Id-Version: WP Clean Client Dashboard 1.4.0\n"
+"Project-Id-Version: WP Clean Client Dashboard 1.5.0\n"
 "Report-Msgid-Bugs-To: https://github.com/bluantinoo/wp-clean-client-dashboard/issues\n"
 "POT-Creation-Date: 2026-11-17 00:00+0000\n"
 "PO-Revision-Date: 2026-11-17 00:00+0000\n"
@@ -205,3 +205,12 @@ msgstr "Incolla un JSON esportato in precedenza per ripristinare le impostazioni
 #: wp-clean-client-dashboard.php:851
 msgid "Import settings"
 msgstr "Importa impostazioni"
+
+msgid "Elementor"
+msgstr "Elementor"
+
+msgid "Keep restricted users from switching a page built with Elementor back to the WordPress editor"
+msgstr "Impedisci agli utenti con restrizioni di riportare all'editor di WordPress una pagina costruita con Elementor"
+
+msgid "The \"Edit with WordPress\" button is hidden and the switch is refused on the server, in both the block editor and the classic editor. A page opened in Elementor and left empty can still be switched back. Excluded users are not affected."
+msgstr "Il pulsante \"Edit with WordPress\" viene nascosto e il passaggio viene rifiutato dal server, sia nell'editor a blocchi sia nell'editor classico. Una pagina aperta in Elementor e lasciata vuota si può ancora riportare indietro. Gli utenti esclusi non sono toccati."

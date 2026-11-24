@@ -17,6 +17,7 @@ For every logged-in user who is not on the excluded list:
 - **Admin menu**: top-level items and sub-pages you tick are hidden. Updates, Theme File Editor, Site Editor and Customizer are hidden by default.
 - **Admin bar**: nodes you tick are removed, on both frontend and backend. The WordPress logo becomes the site icon and links to the frontend (from the admin) or to the dashboard (from the frontend).
 - **Dashboard widgets**: widgets you tick are removed.
+- **Elementor pages**: on a page with an Elementor layout, the "Edit with WordPress" button is hidden and the switch to the WordPress editor is refused on the server, so the page cannot lose its layout by mistake. A page opened in Elementor and left empty can still be switched back. On by default.
 - **Help tab** and the WordPress version in the footer are hidden; the footer text is replaced with your own (links and basic HTML allowed).
 
 The lists of widgets and admin bar nodes are discovered automatically while an excluded user browses the site, so items added by other plugins show up without any configuration.
@@ -59,6 +60,7 @@ Everything is on **Settings > Clean Dashboard**:
 | Admin bar nodes to hide | Nodes discovered on admin and frontend pages |
 | CSS selectors to hide | Any element, one selector per line |
 | Custom footer text | Footer text shown to restricted users |
+| Elementor | Keep restricted users from switching Elementor pages back to the WordPress editor |
 | Export / Import settings | JSON snapshot of all the above |
 
 ### Filters

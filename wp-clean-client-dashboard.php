@@ -3,7 +3,7 @@
  * Plugin Name:  WP Clean Client Dashboard
  * Plugin URI:   https://github.com/bluantinoo/wp-clean-client-dashboard
  * Description:  Hides notices, blocks updates, hides menu items and cleans the admin UI for all users except designated ones.
- * Version:      1.4.1
+ * Version:      1.5.0
  * Author:       Diego Vagnoli
  * Author URI:   https://diegovagnoli.it
  * License:      GPL-2.0-or-later
@@ -38,6 +38,13 @@ final class WP_Clean_Client_Dashboard {
     private const OPT_WIDGETS   = 'wpccd_hidden_widgets';
     private const OPT_ADMIN_BAR = 'wpccd_hidden_admin_bar_nodes';
     private const OPT_FOOTER    = 'wpccd_footer_text';
+    private const OPT_ELEMENTOR = 'wpccd_protect_elementor';
+
+    /** Elementor post meta: present ("builder") while a post is edited with Elementor. */
+    private const ELEMENTOR_MODE_META = '_elementor_edit_mode';
+
+    /** Elementor post meta holding the layout as JSON. */
+    private const ELEMENTOR_DATA_META = '_elementor_data';
 
     /**
      * Transient keys used to cache discovered lists.
@@ -126,7 +133,7 @@ final class WP_Clean_Client_Dashboard {
         add_action( 'admin_init',        [ $instance, 'register_settings' ] );
         add_filter( 'option_page_capability_wpccd_group', [ $instance, 'settings_capability' ] );
         // Covers every other write path too (e.g. options.php with option_page=options).
-        foreach ( [ self::OPT_USERS, self::OPT_SELECTORS, self::OPT_MENUS, self::OPT_WIDGETS, self::OPT_ADMIN_BAR, self::OPT_FOOTER ] as $option ) {
+        foreach ( [ self::OPT_USERS, self::OPT_SELECTORS, self::OPT_MENUS, self::OPT_WIDGETS, self::OPT_ADMIN_BAR, self::OPT_FOOTER, self::OPT_ELEMENTOR ] as $option ) {
             add_filter( 'pre_update_option_' . $option, [ $instance, 'keep_option_for_restricted_users' ], 10, 2 );
         }
         add_action( 'admin_notices',     [ $instance, 'maybe_show_unconfigured_notice' ] );
@@ -150,6 +157,11 @@ final class WP_Clean_Client_Dashboard {
         add_action( 'wp_head',                     [ $instance, 'replace_wp_logo_with_favicon' ] );
         // Import handler: needs to run before any output so it can redirect.
         add_action( 'admin_init',                  [ $instance, 'handle_import' ] );
+        // Elementor: keep pages with a layout from being switched back to the WordPress editor.
+        add_filter( 'delete_post_metadata',        [ $instance, 'keep_elementor_mode' ], 10, 5 );
+        add_filter( 'update_post_metadata',        [ $instance, 'keep_elementor_mode_value' ], 10, 4 );
+        add_filter( 'admin_body_class',            [ $instance, 'elementor_locked_body_class' ] );
+        add_action( 'admin_head',                  [ $instance, 'hide_elementor_switch_button' ] );
     }
 
     // =========================================================================
@@ -260,6 +272,36 @@ final class WP_Clean_Client_Dashboard {
         return (string) get_option( self::OPT_FOOTER, '' );
     }
 
+    /** Whether pages built with Elementor are protected from restricted users (default on). */
+    private function is_elementor_protection_on(): bool {
+        return '1' === (string) get_option( self::OPT_ELEMENTOR, '1' );
+    }
+
+    /**
+     * Whether the post has an Elementor layout with at least one element.
+     * A page opened in Elementor and left empty ("[]" or no data) has none,
+     * so a restricted user can still switch it back.
+     */
+    private function has_elementor_layout( int $post_id ): bool {
+        $data = get_post_meta( $post_id, self::ELEMENTOR_DATA_META, true );
+        if ( is_string( $data ) && '' !== $data ) {
+            $data = json_decode( $data, true );
+        }
+        return is_array( $data ) && ! empty( $data );
+    }
+
+    /**
+     * Whether the current user must not switch this post away from Elementor.
+     * Requests without a logged-in user (WP-CLI, cron) are not affected.
+     */
+    private function is_elementor_locked( int $post_id ): bool {
+        return $post_id > 0
+            && is_user_logged_in()
+            && ! $this->is_allowed_user()
+            && $this->is_elementor_protection_on()
+            && $this->has_elementor_layout( $post_id );
+    }
+
     // =========================================================================
     // SETTINGS PAGE
     // =========================================================================
@@ -353,12 +395,18 @@ final class WP_Clean_Client_Dashboard {
             'default'           => '',
         ] );
 
+        register_setting( 'wpccd_group', self::OPT_ELEMENTOR, [
+            'sanitize_callback' => [ $this, 'sanitize_checkbox' ],
+            'default'           => '1',
+        ] );
+
         add_settings_section( 'wpccd_s_users',    __( 'Users excluded from restrictions', 'wp-clean-client-dashboard' ), '__return_false', 'wpccd-settings' );
         add_settings_section( 'wpccd_s_widgets',  __( 'Dashboard widgets to hide', 'wp-clean-client-dashboard' ), [ $this, 'render_section_widgets_intro' ], 'wpccd-settings' );
         add_settings_section( 'wpccd_s_menus',    __( 'Menu items to hide', 'wp-clean-client-dashboard' ), [ $this, 'render_section_menus_intro' ], 'wpccd-settings' );
         add_settings_section( 'wpccd_s_adminbar', __( 'Admin bar nodes to hide', 'wp-clean-client-dashboard' ), [ $this, 'render_section_adminbar_intro' ], 'wpccd-settings' );
         add_settings_section( 'wpccd_s_css',      __( 'CSS selectors to hide', 'wp-clean-client-dashboard' ), '__return_false', 'wpccd-settings' );
         add_settings_section( 'wpccd_s_footer',   __( 'Custom footer text', 'wp-clean-client-dashboard' ), '__return_false', 'wpccd-settings' );
+        add_settings_section( 'wpccd_s_elementor', __( 'Elementor', 'wp-clean-client-dashboard' ), '__return_false', 'wpccd-settings' );
 
         add_settings_field( 'wpccd_f_users',    '', [ $this, 'render_field_users' ],    'wpccd-settings', 'wpccd_s_users' );
         add_settings_field( 'wpccd_f_widgets',  '', [ $this, 'render_field_widgets' ],  'wpccd-settings', 'wpccd_s_widgets' );
@@ -366,6 +414,7 @@ final class WP_Clean_Client_Dashboard {
         add_settings_field( 'wpccd_f_adminbar', '', [ $this, 'render_field_adminbar' ], 'wpccd-settings', 'wpccd_s_adminbar' );
         add_settings_field( 'wpccd_f_css',      '', [ $this, 'render_field_selectors' ], 'wpccd-settings', 'wpccd_s_css' );
         add_settings_field( 'wpccd_f_footer',   '', [ $this, 'render_field_footer' ],   'wpccd-settings', 'wpccd_s_footer' );
+        add_settings_field( 'wpccd_f_elementor', '', [ $this, 'render_field_elementor' ], 'wpccd-settings', 'wpccd_s_elementor' );
     }
 
     /**
@@ -406,6 +455,11 @@ final class WP_Clean_Client_Dashboard {
             return [];
         }
         return array_values( array_map( 'sanitize_text_field', $value ) );
+    }
+
+    /** Sanitises a checkbox: '1' when ticked, '0' otherwise (an unticked box is not posted). */
+    public function sanitize_checkbox( mixed $value ): string {
+        return ( ! empty( $value ) && '0' !== $value ) ? '1' : '0';
     }
 
     /** Sanitises the custom footer HTML, allowing only safe inline tags. */
@@ -449,6 +503,7 @@ final class WP_Clean_Client_Dashboard {
             self::OPT_WIDGETS   => [ $this, 'sanitize_menu_list' ],
             self::OPT_ADMIN_BAR => [ $this, 'sanitize_menu_list' ],
             self::OPT_FOOTER    => [ $this, 'sanitize_footer_html' ],
+            self::OPT_ELEMENTOR => [ $this, 'sanitize_checkbox' ],
         ];
 
         foreach ( $map as $key => $sanitizer ) {
@@ -761,6 +816,20 @@ final class WP_Clean_Client_Dashboard {
         }
     }
 
+    /** Renders the Elementor protection checkbox. */
+    public function render_field_elementor(): void {
+        printf(
+            '<label><input type="checkbox" name="%s" value="1"%s> %s</label>',
+            esc_attr( self::OPT_ELEMENTOR ),
+            checked( $this->is_elementor_protection_on(), true, false ),
+            esc_html__( 'Keep restricted users from switching a page built with Elementor back to the WordPress editor', 'wp-clean-client-dashboard' )
+        );
+
+        echo '<p class="description">'
+            . esc_html__( 'The "Edit with WordPress" button is hidden and the switch is refused on the server, in both the block editor and the classic editor. A page opened in Elementor and left empty can still be switched back. Excluded users are not affected.', 'wp-clean-client-dashboard' )
+            . '</p>';
+    }
+
     /** Renders the settings page. */
     public function render_settings_page(): void {
         if ( ! $this->can_manage_settings() ) {
@@ -831,6 +900,7 @@ final class WP_Clean_Client_Dashboard {
                 self::OPT_WIDGETS   => $this->get_hidden_widgets(),
                 self::OPT_ADMIN_BAR => $this->get_hidden_admin_bar_nodes(),
                 self::OPT_FOOTER    => $this->get_footer_text(),
+                self::OPT_ELEMENTOR => $this->is_elementor_protection_on() ? '1' : '0',
             ];
             $export_json = wp_json_encode( $export_data, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE );
             ?>
@@ -889,6 +959,54 @@ final class WP_Clean_Client_Dashboard {
             return;
         }
         echo '<style>#contextual-help-link-wrap{display:none!important}</style>' . "\n";
+    }
+
+    /**
+     * Refuses to delete Elementor's edit mode meta for restricted users on posts
+     * with an Elementor layout. Both "Edit with WordPress" paths (the REST field
+     * of the block editor and the classic editor form) end in this deletion.
+     * Deleting the whole post is not affected (it goes through delete_metadata_by_mid()).
+     */
+    public function keep_elementor_mode( mixed $check, int $object_id, string $meta_key, mixed $meta_value, bool $delete_all ): mixed {
+        if ( self::ELEMENTOR_MODE_META !== $meta_key || $delete_all || null !== $check ) {
+            return $check;
+        }
+        return $this->is_elementor_locked( $object_id ) ? false : $check;
+    }
+
+    /**
+     * Refuses to empty Elementor's edit mode meta for restricted users on posts with
+     * an Elementor layout. Elementor reads the meta as a boolean, so an empty value
+     * (e.g. written through the REST meta field Elementor registers) has the same
+     * effect as deleting it.
+     */
+    public function keep_elementor_mode_value( mixed $check, int $object_id, string $meta_key, mixed $meta_value ): mixed {
+        if ( self::ELEMENTOR_MODE_META !== $meta_key || ! empty( $meta_value ) || null !== $check ) {
+            return $check;
+        }
+        return $this->is_elementor_locked( $object_id ) ? false : $check;
+    }
+
+    /** Marks the editor screen of a protected post, so the switch button can be hidden. */
+    public function elementor_locked_body_class( string $classes ): string {
+        $screen = function_exists( 'get_current_screen' ) ? get_current_screen() : null;
+        $post   = get_post();
+        if ( ! $screen || 'post' !== $screen->base || ! $post ) {
+            return $classes;
+        }
+        return $this->is_elementor_locked( (int) $post->ID ) ? $classes . ' wpccd-elementor-locked ' : $classes;
+    }
+
+    /**
+     * Hides "Edit with WordPress" on protected posts while they are in Elementor mode.
+     * Elementor uses the same button for the opposite switch, so it stays visible
+     * on posts that are not built with Elementor.
+     */
+    public function hide_elementor_switch_button(): void {
+        if ( $this->is_allowed_user() || ! $this->is_elementor_protection_on() ) {
+            return;
+        }
+        echo '<style>body.wpccd-elementor-locked.elementor-editor-active #elementor-switch-mode{display:none!important}</style>' . "\n";
     }
 
     /**

@@ -16,6 +16,7 @@ foreach ( [
     'wpccd_hidden_widgets',
     'wpccd_hidden_admin_bar_nodes',
     'wpccd_footer_text',
+    'wpccd_protect_elementor',
 ] as $option ) {
     delete_option( $option );
 }

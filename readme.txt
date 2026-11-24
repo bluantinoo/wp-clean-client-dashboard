@@ -4,7 +4,7 @@ Tags: admin, dashboard, cleanup, client, white label
 Requires at least: 6.0
 Tested up to: 7.1
 Requires PHP: 8.0
-Stable tag: 1.4.1
+Stable tag: 1.5.0
 License: GPL-2.0-or-later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -21,6 +21,7 @@ Cleans up the WordPress admin for clients and non-technical users, while leaving
 * **Dashboard widgets hidden**: tick which widgets to remove from the Dashboard home screen.
 * **Help tab suppressed.**
 * **Custom footer text** (links and basic HTML allowed).
+* **Elementor pages kept in Elementor**: on a page with an Elementor layout, the "Edit with WordPress" button is hidden and the switch to the WordPress editor is refused on the server. On by default, with a setting to switch it off.
 * **Export / Import** of all settings as JSON.
 
 No page builders, no upsells, no analytics. No dependencies beyond WordPress itself, apart from the bundled library that checks the GitHub releases for updates; the update check and the download of an update are the only outgoing requests the plugin makes.
@@ -73,6 +74,10 @@ Yes, with the `wpccd_blocked_caps` filter. For example, to also block plugin act
 
 Return `false` from the `wpccd_hide_all_notices` filter. Only the notices matching the CSS selectors in the settings are then hidden.
 
+= What does the Elementor protection do? =
+
+When a page built with Elementor is switched to the WordPress editor ("Edit with WordPress", in the block editor or the classic editor), Elementor removes the `_elementor_edit_mode` meta and the page loses its layout until someone switches it back. For restricted users the plugin hides that button on pages with an Elementor layout and refuses on the server both the removal of the meta and an empty value, whatever the request. For the same reason, restoring a revision saved before the page was built with Elementor brings back the old text, but the page stays in Elementor. A page opened in Elementor and left empty can still be switched back, and posts not built with Elementor keep the "Edit with Elementor" button. Excluded users, WP-CLI and cron are not affected. Switch it off under **Elementor** in the settings.
+
 = What HTML is allowed in the custom footer? =
 
 `<a>`, `<strong>`, `<em>`, `<span style="">`, `<br>`. Everything else is stripped on save.
@@ -83,6 +88,9 @@ Return `false` from the `wpccd_hide_all_notices` filter. Only the notices matchi
 2. Dashboard as seen by a restricted user.
 
 == Changelog ==
+
+= 1.5.0 =
+* Added: restricted users can no longer switch a page with an Elementor layout back to the WordPress editor. The "Edit with WordPress" button is hidden on those pages and the removal or emptying of `_elementor_edit_mode` is refused on the server. Pages left empty in Elementor can still be switched back. On by default, with a setting to switch it off; included in export and import.
 
 = 1.4.1 =
 * Added: updates from the GitHub releases of the plugin, through the bundled Plugin Update Checker 6.0 (MIT).
@@ -128,6 +136,9 @@ Return `false` from the `wpccd_hide_all_notices` filter. Only the notices matchi
 * Initial release. Notices hiding, update capability blocking, basic menu removal, user exclusion list.
 
 == Upgrade Notice ==
+
+= 1.5.0 =
+Restricted users can no longer switch a page built with Elementor back to the WordPress editor. On by default: switch it off under Settings > Clean Dashboard > Elementor.
 
 = 1.4.1 =
 Updates now come from the GitHub releases of the plugin. Install this version by hand once; the next ones arrive in Dashboard > Updates.
